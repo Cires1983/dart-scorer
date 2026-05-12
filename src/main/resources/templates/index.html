@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Darts Pro - Smart Scorer</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --card-bg: #2d2d2d;
+            --primary-color: #27ae60;
+            --accent-color: #f1c40f;
+            --text-color: #ffffff;
+            --danger-color: #c0392b;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 95%;
+            max-width: 450px;
+            background: var(--card-bg);
+            padding: 15px;
+            margin: 10px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+
+        /* Spieler & Average */
+        .player-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 10px;
+            background: #383838;
+            border: 2px solid transparent;
+        }
+
+        .active-player {
+            border-color: var(--accent-color);
+            background: #444;
+        }
+
+        .avg-label { color: #888; font-size: 0.85rem; display: block; }
+        .score-display { font-size: 2.5rem; font-weight: bold; color: var(--accent-color); }
+
+        /* Turn-Bereich & Korrektur */
+        .turn-container {
+            background: #222;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+
+        .turn-sum { font-size: 1.1rem; color: #888; margin-bottom: 10px; }
+        .turn-sum strong { color: white; font-size: 1.4rem; }
+
+        .turn-display {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .dart-column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 60px;
+        }
+
+        .dart-slot {
+            width: 55px;
+            height: 55px;
+            border: 2px solid #555;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            background: #333;
+            color: var(--accent-color);
+            cursor: pointer;
+            border: none;
+            font-size: 1.1rem;
+        }
+
+        .dart-label {
+            margin-top: 5px;
+            font-size: 0.85rem;
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        .empty-slot { border: 2px dashed #444; background: none; color: #444; cursor: default; }
+
+        /* Keypad */
+        .dart-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+            margin-top: 15px;
+        }
+
+        .btn-num {
+            background: #444;
+            color: white;
+            padding: 12px 0;
+            border-radius: 6px;
+            border: none;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+
+        .btn-num.selected { background: var(--primary-color) !important; }
+
+        .multiplier-section {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .btn-mult {
+            flex: 1;
+            padding: 18px;
+            border-radius: 10px;
+            border: none;
+            font-weight: bold;
+            color: white;
+            font-size: 1.1rem;
+        }
+
+        .s { background: #555; }
+        .d { background: #e67e22; }
+        .t { background: #e74c3c; }
+
+        .btn-confirm {
+            width: 100%;
+            padding: 18px;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 10px;
+            border: none;
+            font-weight: bold;
+            font-size: 1.2rem;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- 1. SETUP SCREEN -->
+    <div th:if="${!gameStarted}">
+        <h1 style="color: var(--primary-color)">Darts Setup</h1>
+        <form action="/setup" method="post">
+            <input type="text" name="name1" placeholder="Name Player 1" style="width:90%; padding:12px; margin:10px; border-radius:8px; background:#444; color:white; border:none;" required>
+            <input type="text" name="name2" placeholder="Name Player 2" style="width:90%; padding:12px; margin:10px; border-radius:8px; background:#444; color:white; border:none;" required>
+            <button type="submit" style="width:95%; padding:15px; background:var(--primary-color); color:white; border:none; border-radius:10px; font-weight:bold;">START MATCH</button>
+        </form>
+    </div>
+
+    <!-- 2. GAME SCREEN -->
+    <div th:if="${gameStarted}">
+        
+        <!-- Scoreboard -->
+        <div th:each="p : ${players}" class="player-row" th:classappend="${p == activePlayer} ? 'active-player' : ''">
+            <div style="text-align: left;">
+                <span th:text="${p.name}" style="font-size: 1.2rem; font-weight:bold;">Name</span>
+                <span class="avg-label">Avg: <strong th:text="${#numbers.formatDecimal(p.getAverage(), 1, 2)}">0.00</strong></span>
+            </div>
+            <div class="score-display" th:text="${p.score}">501</div>
+        </div>
+
+        <!-- Aktueller Wurf (Turn) -->
+        <div class="turn-container">
+            <div class="turn-sum">Turn Score: <strong th:text="${turnSum}">0</strong></div>
+            <div class="turn-display">
+                <!-- Aktive Darts mit Labels -->
+                <div class="dart-column" th:each="dart, iter : ${currentTurnDarts}">
+                    <form action="/removeDart" method="post">
+                        <input type="hidden" name="index" th:value="${iter.index}">
+                        <button type="submit" class="dart-slot" th:text="${dart.points}"></button>
+                    </form>
+                    <span class="dart-label" th:text="${dart.label}">T-20</span>
+                </div>
+                <!-- Platzhalter -->
+                <div class="dart-column" th:each="i : ${#numbers.sequence(currentTurnDarts.size(), 2)}" th:if="${currentTurnDarts.size() < 3}">
+                    <div class="dart-slot empty-slot">-</div>
+                    <span class="dart-label" style="color:#444">...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bestätigung -->
+        <div th:if="${!currentTurnDarts.isEmpty()}">
+            <form action="/confirmTurn" method="post">
+                <button type="submit" class="btn-confirm">CONFIRM SCORE</button>
+            </form>
+        </div>
+
+        <!-- Keypad (Sichtbar wenn < 3 Darts) -->
+        <div id="keypad" th:if="${currentTurnDarts.size() < 3}">
+            <div class="dart-grid">
+                <button th:each="i : ${#numbers.sequence(1, 20)}" class="btn-num" th:text="${i}" th:onclick="'selectNumber(' + ${i} + ', this)'"></button>
+                <button class="btn-num" onclick="selectNumber(25, this)">Bull</button>
+                <button class="btn-num" onclick="selectNumber(0, this)">0</button>
+            </div>
+            <div class="multiplier-section">
+                <button class="btn-mult s" onclick="submitDart(1)">Single</button>
+                <button class="btn-mult d" onclick="submitDart(2)">Double</button>
+                <button class="btn-mult t" id="triple-btn" onclick="submitDart(3)">Triple</button>
+            </div>
+        </div>
+
+        <form action="/reset" method="post">
+            <button type="submit" style="background:none; color:var(--danger-color); border:1px solid var(--danger-color); margin-top:25px; padding:8px; border-radius:5px; font-size:0.8rem; cursor:pointer;">END MATCH</button>
+        </form>
+    </div>
+</div>
+
+<!-- Verstecktes Formular für Keypad -->
+<form id="dartForm" action="/addDart" method="post" style="display:none;">
+    <input type="hidden" name="value" id="hiddenValue">
+    <input type="hidden" name="multiplier" id="hiddenMult">
+</form>
+
+<script>
+    let selectedNum = -1;
+
+    function selectNumber(num, element) {
+        selectedNum = num;
+        document.querySelectorAll('.btn-num').forEach(b => b.classList.remove('selected'));
+        element.classList.add('selected');
+        
+        const tBtn = document.getElementById('triple-btn');
+        if(tBtn) tBtn.style.visibility = (num === 25 || num === 0) ? 'hidden' : 'visible';
+    }
+
+    function submitDart(mult) {
+        if (selectedNum === -1) return;
+        if (selectedNum === 25 && mult === 3) return;
+
+        document.getElementById('hiddenValue').value = selectedNum;
+        document.getElementById('hiddenMult').value = mult;
+        document.getElementById('dartForm').submit();
+    }
+</script>
+
+</body>
+</html>
